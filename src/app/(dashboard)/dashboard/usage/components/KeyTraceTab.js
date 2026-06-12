@@ -103,7 +103,9 @@ export default function KeyTraceTab() {
 
           {expanded[keyGroup.apiKey] && (
             <div className="mt-4 border-t border-border pt-3">
-              <div className="overflow-x-auto">
+              {/* Aggregated summary */}
+              <p className="text-xs font-medium text-text-muted mb-2">Summary</p>
+              <div className="overflow-x-auto mb-4">
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-left text-text-muted border-b border-border/50">
@@ -119,18 +121,14 @@ export default function KeyTraceTab() {
                   <tbody>
                     {keyGroup.details.map((d, i) => (
                       <tr key={i} className="border-b border-border/30 last:border-0">
-                        <td className="py-2 pr-3 font-mono text-xs">
-                          {d.model}
-                        </td>
+                        <td className="py-2 pr-3 font-mono text-xs">{d.model}</td>
                         <td className="py-2 pr-3">
                           <span className="inline-flex items-center gap-1">
                             <span className="size-2 rounded-full bg-orange-500/60" />
                             {d.providerName}
                           </span>
                         </td>
-                        <td className="py-2 pr-3 text-text-muted truncate max-w-[120px]">
-                          {d.connectionName}
-                        </td>
+                        <td className="py-2 pr-3 text-text-muted truncate max-w-[120px]">{d.connectionName}</td>
                         <td className="py-2 pr-3 text-right tabular-nums">{d.requests}</td>
                         <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(d.promptTokens)}</td>
                         <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(d.completionTokens)}</td>
@@ -140,6 +138,46 @@ export default function KeyTraceTab() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Individual request log */}
+              {keyGroup.requests && keyGroup.requests.length > 0 && (
+                <>
+                  <p className="text-xs font-medium text-text-muted mb-2">Recent Requests</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-text-muted border-b border-border/50">
+                          <th className="pb-1.5 pr-3 font-medium">Time</th>
+                          <th className="pb-1.5 pr-3 font-medium">Model</th>
+                          <th className="pb-1.5 pr-3 font-medium">Provider</th>
+                          <th className="pb-1.5 pr-3 font-medium">Account</th>
+                          <th className="pb-1.5 pr-3 font-medium text-right">Tokens</th>
+                          <th className="pb-1.5 font-medium text-right">Cost</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {keyGroup.requests.map((r, i) => (
+                          <tr key={i} className="border-b border-border/20 last:border-0">
+                            <td className="py-1.5 pr-3 text-text-muted whitespace-nowrap">
+                              {new Date(r.timestamp).toLocaleString([], { month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" })}
+                            </td>
+                            <td className="py-1.5 pr-3 font-mono">{r.model}</td>
+                            <td className="py-1.5 pr-3">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="size-1.5 rounded-full bg-orange-500/60" />
+                                {r.providerName}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pr-3 text-text-muted">{r.connectionName}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">{formatTokens(r.promptTokens + r.completionTokens)}</td>
+                            <td className="py-1.5 text-right tabular-nums">{formatCost(r.cost)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </Card>

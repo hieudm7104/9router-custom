@@ -86,7 +86,7 @@ export async function GET(request) {
       keyMap[k.key] = { id: k.id, name: k.name || k.key.slice(0, 12) + "..." };
     }
 
-    // Group by apiKey → list of detail entries
+    // Group by apiKey → list of detail entries (aggregated by model+connection)
     const grouped = {};
 
     for (const row of rows) {
@@ -125,6 +125,37 @@ export async function GET(request) {
         completionTokens: row.completionTokens || 0,
         cost: row.cost || 0,
         lastUsed: row.lastUsed,
+      });
+    }
+
+    // Also fetch individual request log per key (recent 50 per key)
+    const recentRows = db.all(
+      `SELECT timestamp, apiKey, provider, model, connectionId, promptTokens, completionTokens, cost, status
+       FROM usageHistory ${where}
+       ORDER BY id DESC
+       LIMIT 200`,
+      params
+    );
+
+    // Attach recent requests to each key group
+    for (const row of recentRows) {
+      const keyVal = row.apiKey || "local-no-key";
+      if (!grouped[keyVal]) continue;
+      if (!grouped[keyVal].requests) grouped[keyVal].requests = [];
+      if (grouped[keyVal].requests.length >= 50) continue;
+
+      const connInfo = connMap[row.connectionId];
+      const providerName = nodeMap[row.provider] || row.provider || "unknown";
+
+      grouped[keyVal].requests.push({
+        timestamp: row.timestamp,
+        model: row.model || "unknown",
+        providerName,
+        connectionName: connInfo?.name || row.connectionId || "Unknown",
+        promptTokens: row.promptTokens || 0,
+        completionTokens: row.completionTokens || 0,
+        cost: row.cost || 0,
+        status: row.status || "ok",
       });
     }
 
