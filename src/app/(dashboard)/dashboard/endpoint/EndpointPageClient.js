@@ -858,11 +858,13 @@ export default function APIPageClient({ machineId }) {
   const handleSavePermissions = async () => {
     if (!editPermKey) return;
     try {
+      // If all connections selected, save as null (full access)
+      const allSelected = selectedConnections.length >= connections.length;
       const res = await fetch(`/api/keys/${editPermKey.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          allowedConnections: selectedConnections.length > 0 ? selectedConnections : null,
+          allowedConnections: allSelected ? null : (selectedConnections.length > 0 ? selectedConnections : []),
         }),
       });
       if (res.ok) {
@@ -1512,7 +1514,7 @@ export default function APIPageClient({ machineId }) {
                   <button
                     onClick={() => {
                       setEditPermKey(key);
-                      setSelectedConnections(key.allowedConnections || []);
+                      setSelectedConnections(key.allowedConnections || connections.map(c => c.id));
                     }}
                     className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                     title="Edit permissions"
@@ -1570,7 +1572,25 @@ export default function APIPageClient({ machineId }) {
           />
           {connections.length > 0 && (
             <div className="flex flex-col gap-2">
-              <label className="text-xs sm:text-sm font-medium">Allowed Accounts <span className="text-text-muted font-normal">(empty = all)</span></label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-medium">Allowed Accounts</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConnections(connections.map(c => c.id))}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConnections([])}
+                    className="text-xs text-text-muted hover:underline"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
               <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-2 flex flex-col gap-1">
                 {connections.map((conn) => (
                   <label key={conn.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
@@ -1593,7 +1613,13 @@ export default function APIPageClient({ machineId }) {
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-text-muted">Select which accounts this key can use. Leave empty to allow all.</p>
+              <p className="text-xs text-text-muted">
+                {selectedConnections.length === 0
+                  ? "No selection = full access to all accounts"
+                  : selectedConnections.length === connections.length
+                    ? "All accounts selected (full access)"
+                    : `${selectedConnections.length}/${connections.length} accounts selected`}
+              </p>
             </div>
           )}
           <div className="flex gap-2">
@@ -1627,7 +1653,25 @@ export default function APIPageClient({ machineId }) {
         <div className="flex flex-col gap-4">
           {connections.length > 0 ? (
             <div className="flex flex-col gap-2">
-              <label className="text-xs sm:text-sm font-medium">Allowed Accounts <span className="text-text-muted font-normal">(empty = all)</span></label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs sm:text-sm font-medium">Allowed Accounts</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConnections(connections.map(c => c.id))}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConnections([])}
+                    className="text-xs text-text-muted hover:underline"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+              </div>
               <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-2 flex flex-col gap-1">
                 {connections.map((conn) => (
                   <label key={conn.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
@@ -1650,7 +1694,11 @@ export default function APIPageClient({ machineId }) {
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-text-muted">Select which accounts this key can use. Leave empty to allow all.</p>
+              <p className="text-xs text-text-muted">
+                {selectedConnections.length === connections.length
+                  ? "All accounts selected (full access)"
+                  : `${selectedConnections.length}/${connections.length} accounts selected`}
+              </p>
             </div>
           ) : (
             <p className="text-sm text-text-muted">No provider accounts configured.</p>
