@@ -14,7 +14,7 @@ const SETTINGS_RESPONSE_HEADERS = {
 export async function GET() {
   try {
     const settings = await getSettings();
-    const { password, oidcClientSecret, ...safeSettings } = settings;
+    const { password, oidcClientSecret, endpointPassword, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
     
     const enableRequestLogs = process.env.ENABLE_REQUEST_LOGS === "true";
@@ -35,6 +35,10 @@ export async function GET() {
 export async function PATCH(request) {
   try {
     const body = await request.json();
+
+    // endpointPassword is admin-only; never allow it through the generic settings API.
+    // Use /api/auth/endpoint-password (admin-protected) to change it.
+    delete body.endpointPassword;
 
     // If updating password, hash it
     if (body.newPassword) {
@@ -90,7 +94,7 @@ export async function PATCH(request) {
       resetComboRotation();
     }
 
-    const { password, oidcClientSecret, ...safeSettings } = settings;
+    const { password, oidcClientSecret, endpointPassword, ...safeSettings } = settings;
     safeSettings.oidcConfigured = !!(safeSettings.oidcIssuerUrl && safeSettings.oidcClientId && oidcClientSecret);
     return NextResponse.json(safeSettings, { headers: SETTINGS_RESPONSE_HEADERS });
   } catch (error) {

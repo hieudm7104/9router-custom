@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, validateApiKey } from "@/lib/localDb";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 import { verifyDashboardAuthToken } from "@/lib/auth/dashboardSession";
+import { ENDPOINT_ADMIN_COOKIE, verifyEndpointAdminToken } from "@/lib/auth/endpointSession";
 
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
@@ -27,6 +28,7 @@ const PUBLIC_API_PATHS = [
   "/api/auth/logout",
   "/api/auth/status",
   "/api/auth/oidc",
+  "/api/auth/endpoint",
   "/api/version",
   "/api/settings/require-login",
 ];
@@ -133,6 +135,12 @@ async function hasValidToken(request) {
   return await verifyDashboardAuthToken(token);
 }
 
+// Endpoint-admin layer: a second password gate protecting API-key management.
+async function hasEndpointAdmin(request) {
+  const token = request.cookies.get(ENDPOINT_ADMIN_COOKIE)?.value;
+  return await verifyEndpointAdminToken(token);
+}
+
 // Read settings directly from DB to avoid self-fetch deadlock in proxy
 async function loadSettings() {
   try {
@@ -164,6 +172,20 @@ export const __test__ = {
 
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
+  const method = request.method?.toUpperCase?.() || "GET";
+
+  // API-key management is admin-only: creating/updating/deleting keys requires the
+  // dedicated endpoint-admin unlock (separate password), even for logged-in users.
+  // Reads (GET) stay accessible to normal dashboard viewers.
+  const isKeyMutation =
+    (pathname === "/api/keys" || pathname.startsWith("/api/keys/")) &&
+    method !== "GET" &&
+    method !== "HEAD";
+  if (isKeyMutation) {
+    if (await hasValidCliToken(request)) return NextResponse.next();
+    if (await hasEndpointAdmin(request)) return NextResponse.next();
+    return NextResponse.json({ error: "Endpoint admin unlock required to manage API keys" }, { status: 403 });
+  }
 
   // Local-only gate for spawn-capable / host-secret routes.
   if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {

@@ -32,6 +32,16 @@ export default function ProfilePage() {
   const [passwords, setPasswords] = useState({ current: "", new: "", confirm: "" });
   const [passStatus, setPassStatus] = useState({ type: "", message: "" });
   const [passLoading, setPassLoading] = useState(false);
+  const [endpointPw, setEndpointPw] = useState({ new: "", confirm: "" });
+  const [endpointPwHasPassword, setEndpointPwHasPassword] = useState(false);
+  const [endpointPwStatus, setEndpointPwStatus] = useState({ type: "", message: "" });
+  const [endpointPwLoading, setEndpointPwLoading] = useState(false);
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminChecking, setAdminChecking] = useState(true);
+  const [adminUsingDefault, setAdminUsingDefault] = useState(true);
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [adminUnlockLoading, setAdminUnlockLoading] = useState(false);
+  const [adminUnlockError, setAdminUnlockError] = useState("");
   const [dbLoading, setDbLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState({ type: "", message: "" });
   const [oidcForm, setOidcForm] = useState({
@@ -94,6 +104,85 @@ export default function ProfilePage() {
       setOidcRedirectUri(`${window.location.origin}/api/auth/oidc/callback`);
     }
   }, []);
+
+  useEffect(() => {
+    fetch("/api/settings/endpoint-password")
+      .then((res) => res.json())
+      .then((data) => setEndpointPwHasPassword(!!data.hasPassword))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    // Always re-lock on mount: every visit must re-enter the password.
+    fetch("/api/auth/endpoint/logout", { method: "POST" })
+      .then(() => fetch("/api/auth/endpoint/status", { cache: "no-store" }))
+      .then((res) => res.json())
+      .then((data) => setAdminUsingDefault(!!data.usingDefault))
+      .catch(() => {})
+      .finally(() => {
+        setAdminUnlocked(false);
+        setAdminChecking(false);
+      });
+  }, []);
+
+  const handleAdminUnlock = async (e) => {
+    e?.preventDefault?.();
+    if (!adminPasswordInput) return;
+    setAdminUnlockLoading(true);
+    setAdminUnlockError("");
+    try {
+      const res = await fetch("/api/auth/endpoint/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPasswordInput }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAdminPasswordInput("");
+        setAdminUnlocked(true);
+        setAdminUsingDefault(!!data.usingDefault);
+      } else {
+        setAdminUnlockError(data.error || "Invalid password");
+      }
+    } catch {
+      setAdminUnlockError("An error occurred");
+    } finally {
+      setAdminUnlockLoading(false);
+    }
+  };
+
+  const handleEndpointPasswordChange = async (e) => {
+    e.preventDefault();
+    if (endpointPw.new !== endpointPw.confirm) {
+      setEndpointPwStatus({ type: "error", message: "Passwords do not match" });
+      return;
+    }
+
+    setEndpointPwLoading(true);
+    setEndpointPwStatus({ type: "", message: "" });
+
+    try {
+      const res = await fetch("/api/settings/endpoint-password", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword: endpointPw.new }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setEndpointPwStatus({ type: "success", message: "Endpoint password updated" });
+        setEndpointPw({ new: "", confirm: "" });
+        setEndpointPwHasPassword(true);
+      } else {
+        setEndpointPwStatus({ type: "error", message: data.error || "Failed to update password" });
+      }
+    } catch (err) {
+      setEndpointPwStatus({ type: "error", message: "An error occurred" });
+    } finally {
+      setEndpointPwLoading(false);
+    }
+  };
 
   const updateOutboundProxy = async (e) => {
     e.preventDefault();
@@ -561,6 +650,57 @@ export default function ProfilePage() {
     }
   };
 
+  // Admin gate: require the endpoint admin password before showing the profile.
+  // Shares the same unlock (endpoint_admin_token) as /dashboard/endpoint.
+  if (adminChecking) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-0">
+        <Card>
+          <div className="h-24 animate-pulse" />
+        </Card>
+      </div>
+    );
+  }
+
+  if (!adminUnlocked) {
+    return (
+      <div className="max-w-md mx-auto mt-10 px-4 sm:px-0">
+        <Card>
+          <div className="flex flex-col items-center text-center gap-2 mb-6">
+            <div className="size-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-2xl">lock</span>
+            </div>
+            <h2 className="text-lg font-semibold">Admin Access Required</h2>
+            <p className="text-sm text-text-muted">
+              Enter the endpoint admin password to access your profile.
+            </p>
+          </div>
+          <form onSubmit={handleAdminUnlock} className="flex flex-col gap-4">
+            <Input
+              type="password"
+              placeholder="Endpoint admin password"
+              value={adminPasswordInput}
+              onChange={(e) => setAdminPasswordInput(e.target.value)}
+              autoFocus
+              required
+            />
+            {adminUnlockError && (
+              <p className="text-sm text-red-500">{adminUnlockError}</p>
+            )}
+            {adminUsingDefault && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Default password is <code className="bg-amber-500/20 px-1 rounded">123456</code>. Change it after unlocking.
+              </p>
+            )}
+            <Button type="submit" variant="primary" loading={adminUnlockLoading} fullWidth>
+              Unlock
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-0">
       <div className="flex flex-col gap-6">
@@ -736,6 +876,66 @@ export default function ProfilePage() {
                 </div>
               </form>
             )}
+          </div>
+        </Card>
+
+        {/* Endpoint Admin Password */}
+        <Card>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
+              <span className="material-symbols-outlined text-[20px]">key</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-base sm:text-lg font-semibold">Endpoint Password</h3>
+              <p className="text-xs sm:text-sm text-text-muted">
+                Admin password for the Endpoint page (API key management). Shared with the lock on /dashboard/endpoint.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col gap-4">
+            {!endpointPwHasPassword && (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">
+                  Still using the default endpoint password (<code className="bg-amber-500/20 px-1 rounded">123456</code>). Set a new one below.
+                </p>
+              </div>
+            )}
+            <form onSubmit={handleEndpointPasswordChange} className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs sm:text-sm font-medium">New Endpoint Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Enter new password"
+                    value={endpointPw.new}
+                    onChange={(e) => setEndpointPw({ ...endpointPw, new: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs sm:text-sm font-medium">Confirm New Password</label>
+                  <Input
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={endpointPw.confirm}
+                    onChange={(e) => setEndpointPw({ ...endpointPw, confirm: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              {endpointPwStatus.message && (
+                <p className={`text-xs sm:text-sm ${endpointPwStatus.type === "error" ? "text-red-500" : "text-green-500"}`}>
+                  {endpointPwStatus.message}
+                </p>
+              )}
+
+              <div className="pt-2">
+                <Button type="submit" variant="primary" loading={endpointPwLoading} className="w-full sm:w-auto">
+                  {endpointPwHasPassword ? "Update Endpoint Password" : "Set Endpoint Password"}
+                </Button>
+              </div>
+            </form>
           </div>
         </Card>
 
