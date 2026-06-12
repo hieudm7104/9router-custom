@@ -92,7 +92,7 @@ export default function KeySettingsPage() {
   // Not authenticated — show login form
   if (!keyInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center p-4">
+      <div className="flex items-center justify-center py-10 px-4">
         <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6">
           <div className="flex flex-col items-center text-center gap-2 mb-6">
             <div className="size-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
@@ -129,8 +129,8 @@ export default function KeySettingsPage() {
 
   // Authenticated — show priority settings
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 p-4">
-      <div className="max-w-lg mx-auto">
+    <div className="px-4 sm:px-0">
+      <div className="max-w-lg mx-auto flex flex-col gap-4">
         {/* Header */}
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 p-6 mb-4">
           <div className="flex items-center justify-between">
