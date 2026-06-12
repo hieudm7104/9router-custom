@@ -907,6 +907,45 @@ export default function APIPageClient({ machineId }) {
     });
   };
 
+  // Toggle a key's access to a specific connection (reverse permission view)
+  const handleToggleAccountAccess = async (keyId, connectionId, grant) => {
+    const key = keys.find(k => k.id === keyId);
+    if (!key) return;
+
+    let newAllowed;
+    if (grant) {
+      // Add connection to key's allowed list
+      if (key.allowedConnections === null) {
+        // Already full access, nothing to do
+        return;
+      }
+      const updated = [...(key.allowedConnections || []), connectionId];
+      // If all connections now included → set to null (full access)
+      newAllowed = updated.length >= connections.length ? null : updated;
+    } else {
+      // Remove connection from key's allowed list
+      if (key.allowedConnections === null) {
+        // Was full access → set to all EXCEPT this one
+        newAllowed = connections.map(c => c.id).filter(id => id !== connectionId);
+      } else {
+        newAllowed = key.allowedConnections.filter(id => id !== connectionId);
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/keys/${keyId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ allowedConnections: newAllowed }),
+      });
+      if (res.ok) {
+        await fetchData();
+      }
+    } catch (error) {
+      console.log("Error updating account access:", error);
+    }
+  };
+
   const handleDeleteKey = async (id) => {
     setConfirmState({
       title: "Delete API Key",
@@ -1546,6 +1585,58 @@ export default function APIPageClient({ machineId }) {
                   >
                     <span className="material-symbols-outlined text-[18px]">delete</span>
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* Account Access (reverse permission view) */}
+      <Card>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+            <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+          </div>
+          <div>
+            <h3 className="text-base sm:text-lg font-semibold">Account Access</h3>
+            <p className="text-xs sm:text-sm text-text-muted">Choose which API keys can access each account</p>
+          </div>
+        </div>
+
+        {connections.length === 0 ? (
+          <p className="text-sm text-text-muted text-center py-4">No provider accounts configured.</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {connections.map((conn) => (
+              <div key={conn.id} className="border border-border rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="size-2 rounded-full bg-purple-500/60" />
+                  <span className="text-sm font-medium">{providerNodes[conn.provider] || conn.provider}</span>
+                  <span className="text-xs text-text-muted">— {conn.name || conn.email || conn.id.slice(0, 8)}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {keys.map((key) => {
+                    const hasAccess = key.allowedConnections === null || (key.allowedConnections || []).includes(conn.id);
+                    return (
+                      <label
+                        key={key.id}
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border cursor-pointer transition-colors text-xs ${
+                          hasAccess
+                            ? "border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
+                            : "border-border bg-bg text-text-muted hover:border-purple-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={hasAccess}
+                          onChange={(e) => handleToggleAccountAccess(key.id, conn.id, e.target.checked)}
+                          className="rounded"
+                        />
+                        <span>{key.name}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             ))}
