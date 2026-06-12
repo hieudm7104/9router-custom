@@ -107,30 +107,34 @@ export default function KeyTraceTab() {
                 <table className="w-full text-xs sm:text-sm">
                   <thead>
                     <tr className="text-left text-text-muted border-b border-border/50">
+                      <th className="pb-2 pr-3 font-medium">Model</th>
                       <th className="pb-2 pr-3 font-medium">Provider</th>
                       <th className="pb-2 pr-3 font-medium">Account</th>
-                      <th className="pb-2 pr-3 font-medium text-right">Requests</th>
+                      <th className="pb-2 pr-3 font-medium text-right">Req</th>
                       <th className="pb-2 pr-3 font-medium text-right">Input</th>
                       <th className="pb-2 pr-3 font-medium text-right">Output</th>
                       <th className="pb-2 font-medium text-right">Cost</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {keyGroup.accounts.map((acc, i) => (
+                    {keyGroup.details.map((d, i) => (
                       <tr key={i} className="border-b border-border/30 last:border-0">
+                        <td className="py-2 pr-3 font-mono text-xs">
+                          {d.model}
+                        </td>
                         <td className="py-2 pr-3">
                           <span className="inline-flex items-center gap-1">
-                            <span className="size-2 rounded-full bg-primary/60" />
-                            {acc.provider}
+                            <span className="size-2 rounded-full bg-orange-500/60" />
+                            {d.providerName}
                           </span>
                         </td>
-                        <td className="py-2 pr-3 text-text-muted truncate max-w-[140px]">
-                          {acc.connectionName}
+                        <td className="py-2 pr-3 text-text-muted truncate max-w-[120px]">
+                          {d.connectionName}
                         </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{acc.requests}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(acc.promptTokens)}</td>
-                        <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(acc.completionTokens)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatCost(acc.cost)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{d.requests}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(d.promptTokens)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{formatTokens(d.completionTokens)}</td>
+                        <td className="py-2 text-right tabular-nums">{formatCost(d.cost)}</td>
                       </tr>
                     ))}
                   </tbody>
