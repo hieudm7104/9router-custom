@@ -13,6 +13,9 @@ RUN --mount=type=cache,target=/root/.npm \
 
 COPY . ./
 ENV NEXT_TELEMETRY_DISABLED=1
+# VPS with low RAM (~1GB): raise Node heap limit so the build can use swap
+# instead of crashing with "heap out of memory".
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npm run build
 
 FROM ${NODE_IMAGE} AS runner
