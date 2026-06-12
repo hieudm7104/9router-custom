@@ -67,6 +67,7 @@ export async function handleChat(request, clientRawRequest = null) {
 
   // Enforce API key if enabled in settings
   const settings = await getSettings();
+  let keyRecord = null;
   if (settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
@@ -77,6 +78,12 @@ export async function handleChat(request, clientRawRequest = null) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
+    // valid is the full key record (with allowedConnections)
+    if (typeof valid === "object") keyRecord = valid;
+  } else if (apiKey) {
+    // Even if requireApiKey is off, still look up the key for permissions
+    const valid = await isValidApiKey(apiKey);
+    if (valid && typeof valid === "object") keyRecord = valid;
   }
 
   if (!modelStr) {
@@ -102,7 +109,7 @@ export async function handleChat(request, clientRawRequest = null) {
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey),
+      handleSingleModel: (b, m) => handleSingleModelChat(b, m, clientRawRequest, request, apiKey, keyRecord),
       log,
       comboName: modelStr,
       comboStrategy,
@@ -111,13 +118,13 @@ export async function handleChat(request, clientRawRequest = null) {
   }
 
   // Single model request
-  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey);
+  return handleSingleModelChat(body, modelStr, clientRawRequest, request, apiKey, keyRecord);
 }
 
 /**
  * Handle single model chat request
  */
-async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null) {
+async function handleSingleModelChat(body, modelStr, clientRawRequest = null, request = null, apiKey = null, keyRecord = null) {
   const modelInfo = await getModelInfo(modelStr);
 
   // If provider is null, this might be a combo name - check and handle
@@ -164,7 +171,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const allowedConnectionIds = keyRecord?.allowedConnections || null;
+    const connectionPriority = keyRecord?.connectionPriority || null;
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { allowedConnectionIds, connectionPriority });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {

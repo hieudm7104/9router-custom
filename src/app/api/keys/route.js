@@ -19,21 +19,29 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name } = body;
+    const { name, allowedConnections } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
+    // Validate allowedConnections format if provided
+    if (allowedConnections !== undefined && allowedConnections !== null) {
+      if (!Array.isArray(allowedConnections)) {
+        return NextResponse.json({ error: "allowedConnections must be an array of connection IDs" }, { status: 400 });
+      }
+    }
+
     // Always get machineId from server
     const machineId = await getConsistentMachineId();
-    const apiKey = await createApiKey(name, machineId);
+    const apiKey = await createApiKey(name, machineId, allowedConnections || null);
 
     return NextResponse.json({
       key: apiKey.key,
       name: apiKey.name,
       id: apiKey.id,
       machineId: apiKey.machineId,
+      allowedConnections: apiKey.allowedConnections,
     }, { status: 201 });
   } catch (error) {
     console.log("Error creating key:", error);

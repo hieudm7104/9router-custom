@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { isActive } = body;
+    const { isActive, name, allowedConnections } = body;
 
     const existing = await getApiKeyById(id);
     if (!existing) {
@@ -30,6 +30,14 @@ export async function PUT(request, { params }) {
 
     const updateData = {};
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (name !== undefined) updateData.name = name;
+    if (allowedConnections !== undefined) {
+      // null = remove restrictions (allow all), array = set specific permissions
+      if (allowedConnections !== null && !Array.isArray(allowedConnections)) {
+        return NextResponse.json({ error: "allowedConnections must be an array or null" }, { status: 400 });
+      }
+      updateData.allowedConnections = allowedConnections;
+    }
 
     const updated = await updateApiKey(id, updateData);
 

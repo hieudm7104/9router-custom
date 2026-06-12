@@ -21,6 +21,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     ? excludeConnectionIds
     : (excludeConnectionIds ? new Set([excludeConnectionIds]) : new Set());
   const preferredConnectionId = options?.preferredConnectionId || null;
+  const allowedConnectionIds = options?.allowedConnectionIds || null;
+  const connectionPriority = options?.connectionPriority || null;
   // Acquire mutex to prevent race conditions
   const currentMutex = selectionMutex;
   let resolveMutex;
@@ -64,6 +66,8 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
     const availableConnections = connections.filter(c => {
       if (excludeSet.has(c.id)) return false;
       if (isModelLockActive(c, model)) return false;
+      // API key permission: only allow connections in the allowedConnectionIds list
+      if (allowedConnectionIds && !allowedConnectionIds.includes(c.id)) return false;
       return true;
     });
 
@@ -76,6 +80,18 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
         log.debug("AUTH", `  → ${c.id?.slice(0, 8)} | ${excluded ? "excluded" : ""} ${locked ? `modelLocked(${model}) until ${lockUntil}` : ""}`);
       }
     });
+
+    // Per-key priority: reorder available connections by the key's preferred order.
+    // Connections not in the priority list fall to the end (preserving original order).
+    if (connectionPriority && connectionPriority.length > 0) {
+      const priorityMap = {};
+      connectionPriority.forEach((id, idx) => { priorityMap[id] = idx; });
+      availableConnections.sort((a, b) => {
+        const pa = priorityMap[a.id] ?? 999;
+        const pb = priorityMap[b.id] ?? 999;
+        return pa - pb;
+      });
+    }
 
     if (availableConnections.length === 0) {
       // Find earliest lock expiry across all connections for retry timing

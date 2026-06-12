@@ -68,6 +68,10 @@ export default function APIPageClient({ machineId }) {
   const [newKeyName, setNewKeyName] = useState("");
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
+  const [connections, setConnections] = useState([]);
+  const [selectedConnections, setSelectedConnections] = useState([]);
+  const [editPermKey, setEditPermKey] = useState(null);
+  const [providerNodes, setProviderNodes] = useState({});
 
   // Endpoint admin lock (separate password layer protecting this page)
   const [adminUnlocked, setAdminUnlocked] = useState(false);
@@ -455,10 +459,26 @@ export default function APIPageClient({ machineId }) {
 
   const fetchData = async () => {
     try {
-      const keysRes = await fetch("/api/keys");
+      const [keysRes, connsRes, nodesRes] = await Promise.all([
+        fetch("/api/keys"),
+        fetch("/api/providers"),
+        fetch("/api/provider-nodes"),
+      ]);
       const keysData = await keysRes.json();
       if (keysRes.ok) {
         setKeys(keysData.keys || []);
+      }
+      const connsData = await connsRes.json();
+      if (connsRes.ok) {
+        setConnections(connsData.connections || []);
+      }
+      const nodesData = await nodesRes.json();
+      if (nodesRes.ok) {
+        const map = {};
+        for (const n of (nodesData.nodes || [])) {
+          map[n.id] = n.name || n.id;
+        }
+        setProviderNodes(map);
       }
     } catch (error) {
       console.log("Error fetching data:", error);
@@ -811,10 +831,15 @@ export default function APIPageClient({ machineId }) {
     if (!newKeyName.trim()) return;
 
     try {
+      const payload = { name: newKeyName };
+      // If user selected specific connections, include them; otherwise null = all allowed
+      if (selectedConnections.length > 0) {
+        payload.allowedConnections = selectedConnections;
+      }
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newKeyName }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
@@ -822,11 +847,62 @@ export default function APIPageClient({ machineId }) {
         setCreatedKey(data.key);
         await fetchData();
         setNewKeyName("");
+        setSelectedConnections([]);
         setShowAddModal(false);
       }
     } catch (error) {
       console.log("Error creating key:", error);
     }
+  };
+
+  const handleSavePermissions = async () => {
+    if (!editPermKey) return;
+    try {
+      const res = await fetch(`/api/keys/${editPermKey.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          allowedConnections: selectedConnections.length > 0 ? selectedConnections : null,
+        }),
+      });
+      if (res.ok) {
+        await fetchData();
+        setEditPermKey(null);
+        setSelectedConnections([]);
+      }
+    } catch (error) {
+      console.log("Error saving permissions:", error);
+    }
+  };
+
+  const handleRenameKey = (key) => {
+    const newName = prompt("Enter new name:", key.name);
+    if (!newName || newName.trim() === "" || newName === key.name) return;
+    fetch(`/api/keys/${key.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newName.trim() }),
+    }).then((res) => { if (res.ok) fetchData(); });
+  };
+
+  const handleRotateKey = (key) => {
+    setConfirmState({
+      title: "Rotate API Key",
+      message: `Rotate key "${key.name}"?\n\nA new key value will be generated. The old key will stop working immediately. Name and permissions are preserved.`,
+      onConfirm: async () => {
+        setConfirmState(null);
+        try {
+          const res = await fetch(`/api/keys/${key.id}/rotate`, { method: "POST" });
+          const data = await res.json();
+          if (res.ok) {
+            setCreatedKey(data.key?.key || null);
+            await fetchData();
+          }
+        } catch (error) {
+          console.log("Error rotating key:", error);
+        }
+      },
+    });
   };
 
   const handleDeleteKey = async (id) => {
@@ -1412,12 +1488,37 @@ export default function APIPageClient({ machineId }) {
                   </div>
                   <p className="text-xs text-text-muted mt-1">
                     Created {new Date(key.createdAt).toLocaleDateString()}
+                    {key.allowedConnections ? ` · ${key.allowedConnections.length} account(s)` : " · All accounts"}
                   </p>
                   {key.isActive === false && (
                     <p className="text-xs text-orange-500 mt-1">Paused</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRenameKey(key)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    title="Rename key"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleRotateKey(key)}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-amber-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    title="Rotate key (generate new value)"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">sync</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditPermKey(key);
+                      setSelectedConnections(key.allowedConnections || []);
+                    }}
+                    className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded text-text-muted hover:text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    title="Edit permissions"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">shield_person</span>
+                  </button>
                   <Toggle
                     size="sm"
                     checked={key.isActive ?? true}
@@ -1457,6 +1558,7 @@ export default function APIPageClient({ machineId }) {
         onClose={() => {
           setShowAddModal(false);
           setNewKeyName("");
+          setSelectedConnections([]);
         }}
       >
         <div className="flex flex-col gap-4">
@@ -1466,6 +1568,34 @@ export default function APIPageClient({ machineId }) {
             onChange={(e) => setNewKeyName(e.target.value)}
             placeholder="Production Key"
           />
+          {connections.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm font-medium">Allowed Accounts <span className="text-text-muted font-normal">(empty = all)</span></label>
+              <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-2 flex flex-col gap-1">
+                {connections.map((conn) => (
+                  <label key={conn.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedConnections.includes(conn.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedConnections([...selectedConnections, conn.id]);
+                        } else {
+                          setSelectedConnections(selectedConnections.filter((id) => id !== conn.id));
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-xs sm:text-sm truncate">
+                      <span className="font-medium">{providerNodes[conn.provider] || conn.provider}</span>
+                      <span className="text-text-muted"> — {conn.name || conn.email || conn.id.slice(0, 8)}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-text-muted">Select which accounts this key can use. Leave empty to allow all.</p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()}>
               Create
@@ -1474,6 +1604,65 @@ export default function APIPageClient({ machineId }) {
               onClick={() => {
                 setShowAddModal(false);
                 setNewKeyName("");
+                setSelectedConnections([]);
+              }}
+              variant="ghost"
+              fullWidth
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Permissions Modal */}
+      <Modal
+        isOpen={!!editPermKey}
+        title={`Permissions: ${editPermKey?.name || ""}`}
+        onClose={() => {
+          setEditPermKey(null);
+          setSelectedConnections([]);
+        }}
+      >
+        <div className="flex flex-col gap-4">
+          {connections.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm font-medium">Allowed Accounts <span className="text-text-muted font-normal">(empty = all)</span></label>
+              <div className="max-h-48 overflow-y-auto border border-border rounded-lg p-2 flex flex-col gap-1">
+                {connections.map((conn) => (
+                  <label key={conn.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedConnections.includes(conn.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedConnections([...selectedConnections, conn.id]);
+                        } else {
+                          setSelectedConnections(selectedConnections.filter((id) => id !== conn.id));
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-xs sm:text-sm truncate">
+                      <span className="font-medium">{providerNodes[conn.provider] || conn.provider}</span>
+                      <span className="text-text-muted"> — {conn.name || conn.email || conn.id.slice(0, 8)}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-text-muted">Select which accounts this key can use. Leave empty to allow all.</p>
+            </div>
+          ) : (
+            <p className="text-sm text-text-muted">No provider accounts configured.</p>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={handleSavePermissions} fullWidth>
+              Save
+            </Button>
+            <Button
+              onClick={() => {
+                setEditPermKey(null);
+                setSelectedConnections([]);
               }}
               variant="ghost"
               fullWidth

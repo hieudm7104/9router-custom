@@ -46,6 +46,7 @@ export async function handleSearch(request) {
 
   // Enforce API key if enabled in settings
   const settings = await getSettings();
+  let keyRecord = null;
   if (settings.requireApiKey) {
     if (!apiKey) {
       log.warn("AUTH", "Missing API key (requireApiKey=true)");
@@ -56,6 +57,10 @@ export async function handleSearch(request) {
       log.warn("AUTH", "Invalid API key (requireApiKey=true)");
       return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
     }
+    if (typeof valid === "object") keyRecord = valid;
+  } else if (apiKey) {
+    const valid = await isValidApiKey(apiKey);
+    if (valid && typeof valid === "object") keyRecord = valid;
   }
 
   if (!providerInput || typeof providerInput !== "string") {
@@ -79,7 +84,7 @@ export async function handleSearch(request) {
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleProviderSearch(b, m, request, apiKey, settings),
+      handleSingleModel: (b, m) => handleSingleProviderSearch(b, m, request, apiKey, settings, keyRecord),
       log,
       comboName: providerInput,
       comboStrategy,
@@ -87,10 +92,10 @@ export async function handleSearch(request) {
     });
   }
 
-  return handleSingleProviderSearch(body, providerInput, request, apiKey, settings);
+  return handleSingleProviderSearch(body, providerInput, request, apiKey, settings, keyRecord);
 }
 
-async function handleSingleProviderSearch(body, providerInput, request, apiKey, settings) {
+async function handleSingleProviderSearch(body, providerInput, request, apiKey, settings, keyRecord = null) {
   const query = body.query;
   const providerId = resolveProviderId(providerInput);
   const resolvedProvider = AI_PROVIDERS[providerId];
@@ -149,7 +154,9 @@ async function handleSingleProviderSearch(body, providerInput, request, apiKey, 
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(providerId, excludeConnectionIds);
+    const allowedConnectionIds = keyRecord?.allowedConnections || null;
+    const connectionPriority = keyRecord?.connectionPriority || null;
+    const credentials = await getProviderCredentials(providerId, excludeConnectionIds, null, { allowedConnectionIds, connectionPriority });
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {

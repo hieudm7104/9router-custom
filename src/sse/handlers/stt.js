@@ -29,11 +29,16 @@ export async function handleStt(request) {
   log.request("POST", `/v1/audio/transcriptions | ${modelStr}`);
 
   const settings = await getSettings();
+  const apiKey = extractApiKey(request);
+  let keyRecord = null;
   if (settings.requireApiKey) {
-    const apiKey = extractApiKey(request);
     if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     const valid = await isValidApiKey(apiKey);
     if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
+    if (typeof valid === "object") keyRecord = valid;
+  } else if (apiKey) {
+    const valid = await isValidApiKey(apiKey);
+    if (valid && typeof valid === "object") keyRecord = valid;
   }
 
   if (!modelStr) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
@@ -58,7 +63,9 @@ export async function handleStt(request) {
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const allowedConnectionIds = keyRecord?.allowedConnections || null;
+    const connectionPriority = keyRecord?.connectionPriority || null;
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { allowedConnectionIds, connectionPriority });
 
     if (!credentials || credentials.allRateLimited) {
       if (credentials?.allRateLimited) {
