@@ -1595,7 +1595,7 @@ export default function APIPageClient({ machineId }) {
       {/* Account Access (reverse permission view) */}
       <Card>
         <div className="flex items-center gap-3 mb-4">
-          <div className="p-2 rounded-lg bg-purple-500/10 text-purple-500 shrink-0">
+          <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500 shrink-0">
             <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
           </div>
           <div>
@@ -1611,7 +1611,7 @@ export default function APIPageClient({ machineId }) {
             {connections.map((conn) => (
               <div key={conn.id} className="border border-border rounded-lg p-3">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="size-2 rounded-full bg-purple-500/60" />
+                  <span className="size-2 rounded-full bg-orange-500/60" />
                   <span className="text-sm font-medium">{providerNodes[conn.provider] || conn.provider}</span>
                   <span className="text-xs text-text-muted">— {conn.name || conn.email || conn.id.slice(0, 8)}</span>
                 </div>
@@ -1623,8 +1623,8 @@ export default function APIPageClient({ machineId }) {
                         key={key.id}
                         className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border cursor-pointer transition-colors text-xs ${
                           hasAccess
-                            ? "border-purple-300 dark:border-purple-700 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300"
-                            : "border-border bg-bg text-text-muted hover:border-purple-300"
+                            ? "border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300"
+                            : "border-border bg-bg text-text-muted hover:border-orange-300"
                         }`}
                       >
                         <input
