@@ -21,6 +21,10 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
     organization: "",
   });
   const [cloudflareData, setCloudflareData] = useState({ accountId: "" });
+  const [kiroData, setKiroData] = useState({
+    profileArn: "",
+    kiroRegion: "eu-central-1",
+  });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [validating, setValidating] = useState(false);
@@ -46,6 +50,12 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (connection.provider === "cloudflare-ai" && connection.providerSpecificData) {
         setCloudflareData({ accountId: connection.providerSpecificData.accountId || "" });
       }
+      if (connection.provider === "kiro") {
+        setKiroData({
+          profileArn: connection.providerSpecificData?.profileArn || "",
+          kiroRegion: connection.providerSpecificData?.kiroRegion || "eu-central-1",
+        });
+      }
       setTestResult(null);
       setValidationResult(null);
     }
@@ -54,6 +64,7 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
   const isOAuth = connection?.authType === "oauth";
   const isAzure = connection?.provider === "azure";
   const isCloudflareAi = connection?.provider === "cloudflare-ai";
+  const isKiro = connection?.provider === "kiro";
   const isCompatible = connection
     ? (isOpenAICompatibleProvider(connection.provider) || isAnthropicCompatibleProvider(connection.provider))
     : false;
@@ -150,6 +161,15 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
       if (isCloudflareAi) {
         updates.providerSpecificData = { accountId: cloudflareData.accountId };
       }
+      if (isKiro) {
+        updates.providerSpecificData = {
+          profileArn: kiroData.profileArn.trim() || null,
+          kiroRegion: kiroData.kiroRegion.trim() || "eu-central-1",
+        };
+        updates.testStatus = "active";
+        updates.lastError = null;
+        updates.lastErrorAt = null;
+      }
       
       await onSave(updates);
     } finally {
@@ -243,6 +263,28 @@ export default function EditConnectionModal({ isOpen, connection, proxyPools, on
           </div>
         )}
 
+        {isKiro && (
+          <div className="bg-sidebar/50 p-4 rounded-lg border border-accent/20">
+            <h3 className="font-semibold mb-3 text-sm">Kiro 403 Fix</h3>
+            <div className="flex flex-col gap-3">
+              <Input
+                label="Profile ARN"
+                value={kiroData.profileArn}
+                onChange={(e) => setKiroData({ ...kiroData, profileArn: e.target.value })}
+                placeholder="arn:aws:codewhisperer:us-east-1:...:profile/..."
+                hint="Required for Kiro. Missing or wrong profileArn causes HTTP 403. Paste ProfileArn from Kiro IDE / app.kiro.dev cookie / Tool 2 JSON."
+              />
+              <Input
+                label="Kiro Region"
+                value={kiroData.kiroRegion}
+                onChange={(e) => setKiroData({ ...kiroData, kiroRegion: e.target.value })}
+                placeholder="eu-central-1"
+                hint="Kiro Q API region. EU workspace usually uses eu-central-1."
+              />
+            </div>
+          </div>
+        )}
+
         {!isCompatible && !isAzure && !isCloudflareAi && (
           <div className="flex items-center gap-3">
             <Button onClick={handleTest} variant="secondary" disabled={testing}>
@@ -283,4 +325,3 @@ EditConnectionModal.propTypes = {
   onSave: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
 };
-
