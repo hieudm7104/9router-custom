@@ -105,6 +105,30 @@ function extractEmailFromAccessToken(accessToken) {
   return payload.email || payload.preferred_username || payload.sub || undefined;
 }
 
+async function fetchKiroProfileArn(accessToken, kiroRegion = "eu-central-1") {
+  if (!accessToken) return null;
+  const region = String(kiroRegion || "eu-central-1").trim() || "eu-central-1";
+  try {
+    const res = await fetch(`https://q.${region}.amazonaws.com/`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/x-amz-json-1.0",
+        "X-Amz-Target": "AmazonCodeWhispererService.ListAvailableProfiles",
+        "User-Agent": "9router/kiro-oauth",
+      },
+      body: JSON.stringify({ maxResults: 10 }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const profiles = Array.isArray(data?.profiles) ? data.profiles : [];
+    const first = profiles.find((p) => p?.arn || p?.profileArn || p?.profile_arn);
+    return first?.arn || first?.profileArn || first?.profile_arn || null;
+  } catch {
+    return null;
+  }
+}
+
 // Extract codex account info from id_token or access token
 export function extractCodexAccountInfo(idToken) {
   const payload = decodeJwtPayload(idToken);
@@ -855,6 +879,7 @@ const PROVIDERS = {
       const trimmedStartUrl = typeof options.startUrl === "string" ? options.startUrl.trim() : "";
       const startUrl = trimmedStartUrl || config.startUrl;
       const authMethod = options.authMethod === "idc" ? "idc" : "builder-id";
+      const kiroRegion = String(options.kiroRegion || options.kiro_region || "eu-central-1").trim() || "eu-central-1";
       const registerClientUrl = `https://oidc.${region}.amazonaws.com/client/register`;
       const deviceAuthUrl = `https://oidc.${region}.amazonaws.com/device_authorization`;
 
@@ -914,6 +939,7 @@ const PROVIDERS = {
         _clientId: clientInfo.clientId,
         _clientSecret: clientInfo.clientSecret,
         _region: region,
+        _kiroRegion: kiroRegion,
         _authMethod: authMethod,
         _startUrl: startUrl,
       };
@@ -945,17 +971,22 @@ const PROVIDERS = {
 
       // AWS SSO OIDC returns camelCase
       if (data.accessToken) {
+        const profileArn = data?.profileArn || await fetchKiroProfileArn(
+          data.accessToken,
+          extraData?._kiroRegion || "eu-central-1"
+        );
         return {
           ok: true,
           data: {
             access_token: data.accessToken,
             refresh_token: data.refreshToken,
             expires_in: data.expiresIn,
-            profile_arn: data?.profileArn || null,
+            profile_arn: profileArn || null,
             // Store client credentials for refresh
             _clientId: extraData?._clientId,
             _clientSecret: extraData?._clientSecret,
             _region: extraData?._region,
+            _kiroRegion: extraData?._kiroRegion,
             _authMethod: extraData?._authMethod,
             _startUrl: extraData?._startUrl,
           },
@@ -982,6 +1013,8 @@ const PROVIDERS = {
           clientId: tokens._clientId,
           clientSecret: tokens._clientSecret,
           region: tokens._region || "us-east-1",
+          kiroRegion: tokens._kiroRegion || "eu-central-1",
+          oidcRegion: tokens._region || "us-east-1",
           authMethod: tokens._authMethod || "builder-id",
           startUrl: tokens._startUrl || KIRO_CONFIG.startUrl,
         },

@@ -187,6 +187,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
               _clientId: data._clientId,
               _clientSecret: data._clientSecret,
               _region: data._region,
+              _kiroRegion: data._kiroRegion,
               _authMethod: data._authMethod,
               _startUrl: data._startUrl,
             }
